@@ -25,9 +25,13 @@ type Generated struct {
 }
 
 type proxyGroup struct {
-	Name    string   `yaml:"name"`
-	Type    string   `yaml:"type"`
-	Proxies []string `yaml:"proxies"`
+	Name      string   `yaml:"name"`
+	Type      string   `yaml:"type"`
+	Proxies   []string `yaml:"proxies,omitempty"`
+	Use       []string `yaml:"use,omitempty"`
+	URL       string   `yaml:"url,omitempty"`
+	Interval  int      `yaml:"interval,omitempty"`
+	Tolerance int      `yaml:"tolerance,omitempty"`
 }
 
 func Generate(subscriptions []model.Subscription, selections []model.Selection, opts Options) (Generated, error) {
@@ -37,7 +41,8 @@ func Generate(subscriptions []model.Subscription, selections []model.Selection, 
 	}
 
 	proxyProviders := make(map[string]map[string]any)
-	proxySet := make([]string, 0, len(subscriptions))
+	providerSet := make([]string, 0, len(subscriptions))
+	enabledNodeNames := make([]string, 0, len(subscriptions)+1)
 	warnings := make([]string, 0)
 	sort.Slice(subscriptions, func(i, j int) bool { return subscriptions[i].ID < subscriptions[j].ID })
 
@@ -57,8 +62,11 @@ func Generate(subscriptions []model.Subscription, selections []model.Selection, 
 				"enable": true, "url": "https://www.gstatic.com/generate_204", "interval": 300,
 			},
 		}
-		proxySet = append(proxySet, providerName)
+		providerSet = append(providerSet, providerName)
+		enabledNodeNames = append(enabledNodeNames, providerDisplayName(sub))
 	}
+
+	manualProxyChoices := append([]string{"DIRECT"}, enabledNodeNames...)
 
 	config := map[string]any{
 		"mixed-port":          opts.MixedPort,
@@ -76,8 +84,8 @@ func Generate(subscriptions []model.Subscription, selections []model.Selection, 
 		},
 		"proxy-providers": proxyProviders,
 		"proxy-groups": []proxyGroup{
-			{Name: "Proxy", Type: "select", Proxies: providerAndBuiltin(proxySet, selectionMap["Proxy"])},
-			{Name: "Auto", Type: "url-test", Proxies: providerAndBuiltin(proxySet, selectionMap["Auto"])},
+			{Name: "Proxy", Type: "select", Proxies: providerAndBuiltin(manualProxyChoices, selectionMap["Proxy"])},
+			{Name: "Auto", Type: "url-test", Use: providerSet, URL: "https://www.gstatic.com/generate_204", Interval: 300, Tolerance: 50},
 		},
 		"rules": []string{"MATCH,Proxy"},
 	}
@@ -99,6 +107,14 @@ func providerKey(sub model.Subscription) string {
 	}
 	slug = strings.NewReplacer(" ", "-", "/", "-", "\\", "-").Replace(slug)
 	return fmt.Sprintf("%s-%d", slug, sub.ID)
+}
+
+func providerDisplayName(sub model.Subscription) string {
+	name := strings.TrimSpace(sub.Name)
+	if name == "" {
+		return fmt.Sprintf("subscription-%d", sub.ID)
+	}
+	return name
 }
 
 func providerAndBuiltin(providers []string, preferred string) []string {
