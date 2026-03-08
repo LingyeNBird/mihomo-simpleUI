@@ -32,6 +32,7 @@ func NewRouter(svc *service.Service, staticDir string) *gin.Engine {
 	router.GET("/api/health", server.health)
 	router.GET("/api/status", server.status)
 	router.GET("/api/subscriptions", server.listSubscriptions)
+	router.GET("/api/subscriptions/:id/content", server.subscriptionContent)
 	router.POST("/api/subscriptions", server.createSubscription)
 	router.PUT("/api/subscriptions/:id", server.updateSubscription)
 	router.DELETE("/api/subscriptions/:id", server.deleteSubscription)
@@ -81,6 +82,20 @@ func (s *Server) createSubscription(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, result)
+}
+
+func (s *Server) subscriptionContent(c *gin.Context) {
+	id, err := parseID(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	result, err := s.service.GetSubscriptionContent(c.Request.Context(), id)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, result)
 }
 
 func (s *Server) updateSubscription(c *gin.Context) {

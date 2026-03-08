@@ -12,6 +12,7 @@ import {
   Card,
   Col,
   ConfigProvider,
+  Drawer,
   Empty,
   Flex,
   Form,
@@ -33,7 +34,7 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
-import type { AppStatus, ProxyGroup, Subscription } from "./types";
+import type { AppStatus, ProxyGroup, Subscription, SubscriptionContent } from "./types";
 
 const { Header, Content } = Layout;
 const { Title, Paragraph, Text } = Typography;
@@ -56,6 +57,9 @@ function AppInner() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [proxyGroups, setProxyGroups] = useState<ProxyGroup[]>([]);
   const [proxyGroupError, setProxyGroupError] = useState<string>("");
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerLoading, setViewerLoading] = useState(false);
+  const [viewerData, setViewerData] = useState<SubscriptionContent | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [editing, setEditing] = useState<Subscription | null>(null);
@@ -138,6 +142,23 @@ function AppInner() {
         key: "actions",
         render: (_, item) => (
           <Space wrap>
+            <Button
+              size="small"
+              onClick={async () => {
+                try {
+                  setViewerLoading(true);
+                  const content = await api.subscriptionContent(item.id);
+                  setViewerData(content);
+                  setViewerOpen(true);
+                } catch (error) {
+                  messageApi.error(error instanceof Error ? error.message : "读取订阅内容失败");
+                } finally {
+                  setViewerLoading(false);
+                }
+              }}
+            >
+              查看内容
+            </Button>
             <Button
               size="small"
               onClick={() => {
@@ -345,6 +366,20 @@ function AppInner() {
             </Card>
           </Flex>
         </Spin>
+
+        <Drawer
+          title={viewerData ? `订阅内容：${viewerData.name}` : "订阅内容"}
+          open={viewerOpen}
+          width={720}
+          onClose={() => setViewerOpen(false)}
+        >
+          <Spin spinning={viewerLoading}>
+            <Space direction="vertical" size={12} style={{ width: "100%" }}>
+              <Text type="secondary">{viewerData?.filePath}</Text>
+              <Input.TextArea value={viewerData?.content ?? ""} readOnly autoSize={{ minRows: 24, maxRows: 30 }} />
+            </Space>
+          </Spin>
+        </Drawer>
       </Content>
     </Layout>
   );

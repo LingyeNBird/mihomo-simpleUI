@@ -43,6 +43,7 @@ func Generate(subscriptions []model.Subscription, selections []model.Selection, 
 	proxyProviders := make(map[string]map[string]any)
 	providerSet := make([]string, 0, len(subscriptions))
 	enabledNodeNames := make([]string, 0, len(subscriptions)+1)
+	inlineProxies := make([]map[string]any, 0)
 	warnings := make([]string, 0)
 	sort.Slice(subscriptions, func(i, j int) bool { return subscriptions[i].ID < subscriptions[j].ID })
 
@@ -55,6 +56,15 @@ func Generate(subscriptions []model.Subscription, selections []model.Selection, 
 			continue
 		}
 		providerName := providerKey(sub)
+		proxyNames, proxies, err := loadSubscriptionProxies(sub.FilePath)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("subscription %s could not load proxies: %v", sub.Name, err))
+			continue
+		}
+		if len(proxyNames) == 0 {
+			warnings = append(warnings, fmt.Sprintf("subscription %s does not contain usable proxies", sub.Name))
+			continue
+		}
 		proxyProviders[providerName] = map[string]any{
 			"type": "file",
 			"path": filepath.ToSlash(sub.FilePath),
@@ -63,7 +73,8 @@ func Generate(subscriptions []model.Subscription, selections []model.Selection, 
 			},
 		}
 		providerSet = append(providerSet, providerName)
-		enabledNodeNames = append(enabledNodeNames, providerDisplayName(sub))
+		enabledNodeNames = append(enabledNodeNames, proxyNames...)
+		inlineProxies = append(inlineProxies, proxies...)
 	}
 
 	manualProxyChoices := append([]string{"DIRECT"}, enabledNodeNames...)
@@ -82,6 +93,7 @@ func Generate(subscriptions []model.Subscription, selections []model.Selection, 
 			"nameserver": []string{"1.1.1.1", "8.8.8.8"},
 			"fallback":   []string{"https://1.1.1.1/dns-query", "https://8.8.8.8/dns-query"},
 		},
+		"proxies":         inlineProxies,
 		"proxy-providers": proxyProviders,
 		"proxy-groups": []proxyGroup{
 			{Name: "Proxy", Type: "select", Proxies: providerAndBuiltin(manualProxyChoices, selectionMap["Proxy"])},
@@ -115,6 +127,40 @@ func providerDisplayName(sub model.Subscription) string {
 		return fmt.Sprintf("subscription-%d", sub.ID)
 	}
 	return name
+}
+
+func loadSubscriptionProxies(filePath string) ([]string, []map[string]any, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, nil, err
+	}
+	var payload map[string]any
+	if err := yaml.Unmarshal(content, &payload); err != nil {
+		return nil, nil, err
+	}
+	rawProxies, ok := payload["proxies"]
+	if !ok {
+		return nil, nil, nil
+	}
+	items, ok := rawProxies.([]any)
+	if !ok {
+		return nil, nil, fmt.Errorf("invalid proxies payload")
+	}
+	names := make([]string, 0, len(items))
+	proxies := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		proxy, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := proxy["name"].(string)
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
+		names = append(names, name)
+		proxies = append(proxies, proxy)
+	}
+	return names, proxies, nil
 }
 
 func providerAndBuiltin(providers []string, preferred string) []string {

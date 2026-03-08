@@ -39,3 +39,10 @@ export interface ConfigSyncResult {
   reloaded: boolean;
   warnings?: string[];
 }
+
+export interface SubscriptionContent {
+  id: number;
+  name: string;
+  filePath: string;
+  content: string;
+}

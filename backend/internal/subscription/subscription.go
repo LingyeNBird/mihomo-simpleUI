@@ -38,7 +38,7 @@ type convertedProxy struct {
 	Cipher         string `yaml:"cipher,omitempty"`
 	Password       string `yaml:"password,omitempty"`
 	UUID           string `yaml:"uuid,omitempty"`
-	AlterID        int    `yaml:"alterId,omitempty"`
+	AlterID        *int   `yaml:"alterId"`
 	UDP            bool   `yaml:"udp,omitempty"`
 	TLS            bool   `yaml:"tls,omitempty"`
 	SkipCertVerify bool   `yaml:"skip-cert-verify,omitempty"`
@@ -182,10 +182,12 @@ func normalizeSubscriptionContent(content string) (string, bool, error) {
 	}
 
 	proxies := make([]convertedProxy, 0, len(uriLines))
+	proxyMaps := make([]map[string]any, 0, len(uriLines))
 	for index, line := range uriLines {
 		proxy, ok := parseSubscriptionURI(line, index)
 		if ok {
 			proxies = append(proxies, proxy)
+			proxyMaps = append(proxyMaps, convertedProxyToMap(proxy))
 		}
 	}
 	if len(proxies) == 0 {
@@ -193,7 +195,7 @@ func normalizeSubscriptionContent(content string) (string, bool, error) {
 	}
 
 	payload := map[string]any{
-		"proxies": proxies,
+		"proxies": proxyMaps,
 		"proxy-groups": []map[string]any{{
 			"name":    "Proxy",
 			"type":    "select",
@@ -215,6 +217,44 @@ func collectProxyNames(proxies []convertedProxy) []string {
 		items = append(items, proxy.Name)
 	}
 	return items
+}
+
+func convertedProxyToMap(proxy convertedProxy) map[string]any {
+	result := map[string]any{
+		"name":   proxy.Name,
+		"type":   proxy.Type,
+		"server": proxy.Server,
+		"port":   proxy.Port,
+		"udp":    proxy.UDP,
+	}
+	if proxy.AlterID != nil {
+		result["alterId"] = *proxy.AlterID
+	}
+	if proxy.Cipher != "" {
+		result["cipher"] = proxy.Cipher
+	}
+	if proxy.Password != "" {
+		result["password"] = proxy.Password
+	}
+	if proxy.UUID != "" {
+		result["uuid"] = proxy.UUID
+	}
+	if proxy.TLS {
+		result["tls"] = true
+	}
+	if proxy.SkipCertVerify {
+		result["skip-cert-verify"] = true
+	}
+	if proxy.Network != "" {
+		result["network"] = proxy.Network
+	}
+	if proxy.ServerName != "" {
+		result["servername"] = proxy.ServerName
+	}
+	if proxy.WSOpts != nil {
+		result["ws-opts"] = proxy.WSOpts
+	}
+	return result
 }
 
 func removeWhitespace(value string) string {
@@ -259,12 +299,15 @@ func parseVMess(line string, index int) (convertedProxy, bool) {
 		Type:   "vmess",
 		Server: item.Add,
 		Port:   port,
+		Cipher: "auto",
 		UUID:   item.ID,
 		UDP:    true,
 	}
+	aidValue := 0
 	if aid, err := strconv.Atoi(item.Aid); err == nil {
-		proxy.AlterID = aid
+		aidValue = aid
 	}
+	proxy.AlterID = &aidValue
 	if strings.TrimSpace(item.Net) != "" {
 		proxy.Network = item.Net
 	}

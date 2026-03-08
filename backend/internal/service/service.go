@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -121,6 +122,23 @@ func (s *Service) RefreshSubscription(ctx context.Context, id int64) (subscripti
 		return subscription.RefreshResult{}, err
 	}
 	return refresh, nil
+}
+
+func (s *Service) GetSubscriptionContent(ctx context.Context, id int64) (model.SubscriptionContent, error) {
+	item, err := s.store.GetSubscription(ctx, id)
+	if err != nil {
+		return model.SubscriptionContent{}, err
+	}
+	content, err := os.ReadFile(item.FilePath)
+	if err != nil {
+		return model.SubscriptionContent{}, fmt.Errorf("read subscription content: %w", err)
+	}
+	return model.SubscriptionContent{
+		ID:       item.ID,
+		Name:     item.Name,
+		FilePath: item.FilePath,
+		Content:  string(content),
+	}, nil
 }
 
 func (s *Service) SyncConfig(ctx context.Context) (model.ConfigSyncResult, error) {

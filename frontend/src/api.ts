@@ -1,4 +1,4 @@
-import type { AppStatus, ConfigSyncResult, ProxyGroup, RefreshResult, Subscription } from "./types";
+import type { AppStatus, ConfigSyncResult, ProxyGroup, RefreshResult, Subscription, SubscriptionContent } from "./types";
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -22,6 +22,7 @@ export const api = {
   health: () => request<{ ok: boolean }>("/api/health"),
   status: () => request<AppStatus>("/api/status"),
   listSubscriptions: () => request<Subscription[]>("/api/subscriptions"),
+  subscriptionContent: (id: number) => request<SubscriptionContent>(`/api/subscriptions/${id}/content`),
   createSubscription: (payload: { name: string; url: string; enabled: boolean }) =>
     request<RefreshResult>("/api/subscriptions", { method: "POST", body: JSON.stringify(payload) }),
   updateSubscription: (id: number, payload: { name: string; url: string; enabled: boolean }) =>

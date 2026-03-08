@@ -50,3 +50,10 @@ type ConfigSyncResult struct {
 	Reloaded   bool     `json:"reloaded"`
 	Warnings   []string `json:"warnings,omitempty"`
 }
+
+type SubscriptionContent struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	FilePath string `json:"filePath"`
+	Content  string `json:"content"`
+}
