@@ -6,5 +6,6 @@ data/db/*.db
 data/db/*.db-journal
 data/config/*.db
 data/config/*.db-journal
+data/config/*.metadb
 data/config/subscriptions/*.yaml
 *.log
