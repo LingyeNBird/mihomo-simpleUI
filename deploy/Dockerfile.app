@@ -7,6 +7,8 @@ RUN npm run build
 
 FROM golang:1.25-alpine AS backend-build
 WORKDIR /app/backend
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=$GOPROXY
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ ./

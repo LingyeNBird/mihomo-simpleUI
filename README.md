@@ -64,6 +64,12 @@ $env:MIHOMO_CONTROLLER_PORT="9090"
 docker compose up --build
 ```
 
+如果你的 Docker 构建环境访问 `proxy.golang.org` 不稳定，也可以一起覆盖 `GOPROXY`：
+
+```bash
+APP_PORT=8080 MIHOMO_MIXED_PORT=7890 MIHOMO_CONTROLLER_PORT=9090 GOPROXY=https://goproxy.cn,direct docker compose up --build
+```
+
 启动后：
 
 - WebUI: `http://localhost:${APP_PORT:-8080}`

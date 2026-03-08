@@ -3,6 +3,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.app
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     environment:
       APP_LISTEN_ADDR: :${APP_PORT:-8080}
       APP_DATA_DIR: /app/data
