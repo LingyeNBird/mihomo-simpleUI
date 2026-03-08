@@ -78,6 +78,12 @@ func Generate(subscriptions []model.Subscription, selections []model.Selection, 
 	}
 
 	manualProxyChoices := append([]string{"DIRECT"}, enabledNodeNames...)
+	proxyGroups := []proxyGroup{
+		{Name: "Proxy", Type: "select", Proxies: providerAndBuiltin(manualProxyChoices, selectionMap["Proxy"])},
+	}
+	if len(providerSet) > 0 {
+		proxyGroups = append(proxyGroups, proxyGroup{Name: "Auto", Type: "url-test", Use: providerSet, URL: "https://www.gstatic.com/generate_204", Interval: 300, Tolerance: 50})
+	}
 
 	config := map[string]any{
 		"mixed-port":          opts.MixedPort,
@@ -95,10 +101,7 @@ func Generate(subscriptions []model.Subscription, selections []model.Selection, 
 		},
 		"proxies":         inlineProxies,
 		"proxy-providers": proxyProviders,
-		"proxy-groups": []proxyGroup{
-			{Name: "Proxy", Type: "select", Proxies: providerAndBuiltin(manualProxyChoices, selectionMap["Proxy"])},
-			{Name: "Auto", Type: "url-test", Use: providerSet, URL: "https://www.gstatic.com/generate_204", Interval: 300, Tolerance: 50},
-		},
+		"proxy-groups":    proxyGroups,
 		"rules": []string{"MATCH,Proxy"},
 	}
 
