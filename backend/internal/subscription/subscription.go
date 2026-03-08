@@ -186,6 +186,9 @@ func normalizeSubscriptionContent(content string) (string, bool, error) {
 	for index, line := range uriLines {
 		proxy, ok := parseSubscriptionURI(line, index)
 		if ok {
+			if isLikelySubscriptionMetadata(proxy) {
+				continue
+			}
 			proxies = append(proxies, proxy)
 			proxyMaps = append(proxyMaps, convertedProxyToMap(proxy))
 		}
@@ -255,6 +258,21 @@ func convertedProxyToMap(proxy convertedProxy) map[string]any {
 		result["ws-opts"] = proxy.WSOpts
 	}
 	return result
+}
+
+func isLikelySubscriptionMetadata(proxy convertedProxy) bool {
+	if proxy.Type != "vmess" || !strings.EqualFold(proxy.Server, "google.com") {
+		return false
+	}
+
+	name := strings.TrimSpace(proxy.Name)
+	for _, prefix := range []string{"套餐:", "套餐：", "剩余:", "剩余：", "重置:", "重置：", "到期:", "到期：", "官网:", "官网："} {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+
+	return strings.Contains(name, "http://") || strings.Contains(name, "https://")
 }
 
 func removeWhitespace(value string) string {
