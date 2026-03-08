@@ -1,0 +1,13 @@
+proxies:
+  - name: demo-direct
+    type: direct
+
+proxy-groups:
+  - name: Proxy
+    type: select
+    proxies:
+      - demo-direct
+      - DIRECT
+
+rules:
+  - MATCH,Proxy
