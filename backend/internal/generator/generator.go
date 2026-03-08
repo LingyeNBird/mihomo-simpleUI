@@ -77,7 +77,10 @@ func Generate(subscriptions []model.Subscription, selections []model.Selection, 
 		inlineProxies = append(inlineProxies, proxies...)
 	}
 
-	manualProxyChoices := append([]string{"DIRECT"}, enabledNodeNames...)
+	manualProxyChoices := append([]string{}, enabledNodeNames...)
+	if len(providerSet) > 0 {
+		manualProxyChoices = append([]string{"Auto"}, manualProxyChoices...)
+	}
 	proxyGroups := []proxyGroup{
 		{Name: "Proxy", Type: "select", Proxies: providerAndBuiltin(manualProxyChoices, selectionMap["Proxy"])},
 	}
@@ -167,16 +170,33 @@ func loadSubscriptionProxies(filePath string) ([]string, []map[string]any, error
 }
 
 func providerAndBuiltin(providers []string, preferred string) []string {
-	values := append([]string{"DIRECT"}, providers...)
+	values := uniqueStrings(append([]string{"DIRECT"}, providers...))
 	if preferred == "" {
 		return values
 	}
-	for _, current := range values {
-		if current == preferred {
+	for index, current := range values {
+		if current != preferred {
+			continue
+		}
+		if index == 0 {
 			return values
 		}
+		return append([]string{preferred}, append(values[:index], values[index+1:]...)...)
 	}
 	return values
+}
+
+func uniqueStrings(items []string) []string {
+	seen := make(map[string]struct{}, len(items))
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		result = append(result, item)
+	}
+	return result
 }
 
 func writeAtomically(target string, content []byte) error {
