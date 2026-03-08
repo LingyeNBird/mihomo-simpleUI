@@ -81,6 +81,7 @@ function AppInner() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [editing, setEditing] = useState<Subscription | null>(null);
+  const [subscriptionPanelOpen, setSubscriptionPanelOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [selectingGroup, setSelectingGroup] = useState("");
 
@@ -128,6 +129,7 @@ function AppInner() {
       }
       form.resetFields();
       setEditing(null);
+      setSubscriptionPanelOpen(false);
       await refreshAll();
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "保存失败");
@@ -251,6 +253,18 @@ function AppInner() {
     [messageApi, refreshAll],
   );
 
+  const closeSubscriptionPanel = useCallback(() => {
+    setSubscriptionPanelOpen(false);
+    setEditing(null);
+    form.resetFields();
+  }, [form]);
+
+  const openCreateSubscription = useCallback(() => {
+    form.resetFields();
+    setEditing(null);
+    setSubscriptionPanelOpen(true);
+  }, [form]);
+
   return (
     <Layout style={{ minHeight: "100vh" }}>
       {contextHolder}
@@ -303,70 +317,118 @@ function AppInner() {
         <Spin spinning={loading}>
           <Flex vertical gap={24}>
             <Row gutter={[16, 16]}>
-              <Col xs={24} md={8}>
-                <Card>
-                  <Statistic
-                    title="Mihomo 控制器"
-                    value={status?.mihomoConnected ? "已连接" : "未连接"}
-                    prefix={status?.mihomoConnected ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
-                    valueStyle={{ color: status?.mihomoConnected ? "#16a34a" : "#dc2626" }}
-                  />
-                  <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                    {status?.mihomoVersion ? `版本 ${status.mihomoVersion}` : "等待 controller 就绪"}
-                  </Paragraph>
-                </Card>
-              </Col>
-              <Col xs={24} md={8}>
-                <Card>
-                  <Statistic title="订阅数量" value={status?.subscriptionCount ?? 0} />
-                  <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                    最近配置生成：{formatDate(status?.lastConfigSyncAt)}
-                  </Paragraph>
-                </Card>
-              </Col>
-              <Col xs={24} md={8}>
-                <Card>
-                  <Statistic title="配置路径" value={status?.configPath ?? "-"} valueStyle={{ fontSize: 16 }} />
-                  <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                    最近错误：{status?.lastConfigError || "无"}
-                  </Paragraph>
-                </Card>
-              </Col>
-            </Row>
+              <Col xs={24} xl={12}>
+                <Flex vertical gap={16} style={{ height: "100%" }}>
+                  <Row gutter={[16, 16]}>
+                    <Col xs={24} md={8}>
+                      <Card>
+                        <Statistic
+                          title="Mihomo 控制器"
+                          value={status?.mihomoConnected ? "已连接" : "未连接"}
+                          prefix={status?.mihomoConnected ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+                          valueStyle={{ color: status?.mihomoConnected ? "#16a34a" : "#dc2626" }}
+                        />
+                        <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                          {status?.mihomoVersion ? `版本 ${status.mihomoVersion}` : "等待 controller 就绪"}
+                        </Paragraph>
+                      </Card>
+                    </Col>
+                    <Col xs={24} md={8}>
+                      <Card>
+                        <Statistic title="订阅数量" value={status?.subscriptionCount ?? 0} />
+                        <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                          最近配置生成：{formatDate(status?.lastConfigSyncAt)}
+                        </Paragraph>
+                      </Card>
+                    </Col>
+                    <Col xs={24} md={8}>
+                      <Card>
+                        <Statistic title="配置路径" value={status?.configPath ?? "-"} valueStyle={{ fontSize: 16 }} />
+                        <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                          最近错误：{status?.lastConfigError || "无"}
+                        </Paragraph>
+                      </Card>
+                    </Col>
+                  </Row>
 
-            <Row gutter={[16, 16]}>
-              <Col xs={24} xl={14}>
-                <Card title={editing ? `编辑订阅：${editing.name}` : "添加订阅"} extra={editing ? <Button onClick={() => { setEditing(null); form.resetFields(); }}>取消编辑</Button> : null}>
-                  <Form
-                    layout="vertical"
-                    form={form}
-                    initialValues={{ enabled: true }}
-                    onFinish={(values) => void onFinish(values)}
-                  >
-                    <Form.Item label="名称" name="name" rules={[{ required: true, message: "请输入订阅名称" }]}>
-                      <Input placeholder="例如：机场 A" />
-                    </Form.Item>
-                    <Form.Item label="订阅链接" name="url" rules={[{ required: true, message: "请输入订阅链接" }]}>
-                      <Input.TextArea placeholder="https://example.com/subscription.yaml" autoSize={{ minRows: 3, maxRows: 5 }} />
-                    </Form.Item>
-                    <Form.Item label="启用" name="enabled" valuePropName="checked">
-                      <Switch checkedChildren="启用" unCheckedChildren="停用" />
-                    </Form.Item>
-                    <Space>
-                      <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={submitting}>
-                        {editing ? "保存修改" : "添加并拉取"}
+                  <Card
+                    title="订阅列表"
+                    extra={
+                      <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                          if (subscriptionPanelOpen && !editing) {
+                            closeSubscriptionPanel();
+                            return;
+                          }
+                          openCreateSubscription();
+                        }}
+                      >
+                        {subscriptionPanelOpen && !editing ? "收起" : "添加订阅"}
                       </Button>
-                      <Button onClick={() => form.resetFields()}>重置</Button>
-                    </Space>
-                  </Form>
-                </Card>
+                    }
+                    style={{ flex: 1 }}
+                  >
+                    {subscriptionPanelOpen ? (
+                      <Card size="small" style={{ marginBottom: 16, background: "#f8fafc", borderColor: "#dbeafe" }}>
+                        <Flex justify="space-between" align="center" wrap="wrap" gap={12} style={{ marginBottom: 16 }}>
+                          <div>
+                            <Text strong style={{ fontSize: 16 }}>{editing ? `编辑订阅：${editing.name}` : "添加订阅"}</Text>
+                            <br />
+                            <Text type="secondary">保存后会自动刷新列表，并在可用时同步到 mihomo。</Text>
+                          </div>
+                          <Space>
+                            {editing ? (
+                              <Button
+                                onClick={() => {
+                                  setEditing(null);
+                                  form.resetFields();
+                                }}
+                              >
+                                切换为新增
+                              </Button>
+                            ) : null}
+                            <Button onClick={closeSubscriptionPanel}>关闭</Button>
+                          </Space>
+                        </Flex>
+
+                        <Form
+                          layout="vertical"
+                          form={form}
+                          initialValues={{ enabled: true }}
+                          onFinish={(values) => void onFinish(values)}
+                        >
+                          <Form.Item label="名称" name="name" rules={[{ required: true, message: "请输入订阅名称" }]}> 
+                            <Input placeholder="例如：机场 A" />
+                          </Form.Item>
+                          <Form.Item label="订阅链接" name="url" rules={[{ required: true, message: "请输入订阅链接" }]}> 
+                            <Input.TextArea placeholder="https://example.com/subscription.yaml" autoSize={{ minRows: 3, maxRows: 5 }} />
+                          </Form.Item>
+                          <Form.Item label="启用" name="enabled" valuePropName="checked">
+                            <Switch checkedChildren="启用" unCheckedChildren="停用" />
+                          </Form.Item>
+                          <Space>
+                            <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={submitting}>
+                              {editing ? "保存修改" : "添加并拉取"}
+                            </Button>
+                            <Button onClick={() => form.resetFields()}>重置</Button>
+                          </Space>
+                        </Form>
+                      </Card>
+                    ) : null}
+
+                    <Table rowKey="id" columns={columns} dataSource={subscriptions} pagination={false} scroll={{ x: 960 }} />
+                  </Card>
+                </Flex>
               </Col>
 
-              <Col xs={24} xl={10}>
+              <Col xs={24} xl={12}>
                 <Card
                   title="代理组与节点"
                   extra={<Button size="small" onClick={() => void refreshAll()}>刷新代理组</Button>}
                   styles={{ body: { padding: 18 } }}
+                  style={{ height: "100%" }}
                 >
                   {proxyGroupError ? <Alert type="warning" showIcon message="无法读取 mihomo 代理组" description={proxyGroupError} style={{ marginBottom: 16 }} /> : null}
                   {hiddenGlobalGroup ? (
@@ -466,9 +528,6 @@ function AppInner() {
               </Col>
             </Row>
 
-            <Card title="订阅列表">
-              <Table rowKey="id" columns={columns} dataSource={subscriptions} pagination={false} scroll={{ x: 960 }} />
-            </Card>
           </Flex>
         </Spin>
 
