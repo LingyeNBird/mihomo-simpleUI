@@ -49,11 +49,26 @@ cd deploy
 docker compose up --build
 ```
 
+可通过环境变量覆盖默认端口：
+
+```bash
+APP_PORT=8080 MIHOMO_MIXED_PORT=7890 MIHOMO_CONTROLLER_PORT=9090 docker compose up --build
+```
+
+PowerShell:
+
+```powershell
+$env:APP_PORT="8080"
+$env:MIHOMO_MIXED_PORT="7890"
+$env:MIHOMO_CONTROLLER_PORT="9090"
+docker compose up --build
+```
+
 启动后：
 
-- WebUI: `http://localhost:8080`
-- Mihomo mixed-port: `127.0.0.1:7890`
-- Mihomo controller: `http://localhost:9090`
+- WebUI: `http://localhost:${APP_PORT:-8080}`
+- Mihomo mixed-port: `127.0.0.1:${MIHOMO_MIXED_PORT:-7890}`
+- Mihomo controller: `http://localhost:${MIHOMO_CONTROLLER_PORT:-9090}`
 
 ## 注意
 
