@@ -4,5 +4,7 @@ backend/bin/
 backend/.cache/
 data/db/*.db
 data/db/*.db-journal
+data/config/*.db
+data/config/*.db-journal
 data/config/subscriptions/*.yaml
 *.log
