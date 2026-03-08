@@ -1,0 +1,35 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.app
+    environment:
+      APP_LISTEN_ADDR: :8080
+      APP_DATA_DIR: /app/data
+      APP_CONFIG_DIR: /config
+      APP_SUBSCRIPTIONS_DIR: /config/subscriptions
+      APP_GENERATED_CONFIG_PATH: /config/config.yaml
+      APP_DB_PATH: /app/data/db/app.db
+      APP_STATIC_DIR: /app/static
+      MIHOMO_CONTROLLER_URL: http://mihomo:9090
+      MIHOMO_SECRET: ${MIHOMO_SECRET:-change-me}
+      MIHOMO_MIXED_PORT: 7890
+      MIHOMO_EXTERNAL_PORT: 9090
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../data/config:/config
+      - ../data/db:/app/data/db
+    depends_on:
+      - mihomo
+
+  mihomo:
+    image: metacubex/mihomo:latest
+    command: ["-d", "/config", "-f", "/config/config.yaml"]
+    environment:
+      MIHOMO_SECRET: ${MIHOMO_SECRET:-change-me}
+    ports:
+      - "7890:7890"
+      - "9090:9090"
+    volumes:
+      - ../data/config:/config

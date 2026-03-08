@@ -1,0 +1,42 @@
+allow-lan: true
+bind-address: 0.0.0.0
+dns:
+    enable: true
+    enhanced-mode: fake-ip
+    fallback:
+        - https://1.1.1.1/dns-query
+        - https://8.8.8.8/dns-query
+    ipv6: false
+    listen: 0.0.0.0:1053
+    nameserver:
+        - 1.1.1.1
+        - 8.8.8.8
+external-controller: 0.0.0.0:9090
+log-level: info
+mixed-port: 7890
+mode: rule
+profile:
+    store-fake-ip: true
+    store-selected: true
+proxy-groups:
+    - name: Proxy
+      type: select
+      proxies:
+        - DIRECT
+        - user-subscription-1
+    - name: Auto
+      type: url-test
+      proxies:
+        - DIRECT
+        - user-subscription-1
+proxy-providers:
+    user-subscription-1:
+        health-check:
+            enable: true
+            interval: 300
+            url: https://www.gstatic.com/generate_204
+        path: C:/Users/MSIK/projects/InterestingThings/clash-with-webui/mihomo-webui-proxy/data/config/subscriptions/user-subscription-1.yaml
+        type: file
+rules:
+    - MATCH,Proxy
+secret: change-me
