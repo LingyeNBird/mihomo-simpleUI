@@ -18,11 +18,9 @@ import {
   Form,
   Input,
   Layout,
-  List,
   message,
   Popconfirm,
   Row,
-  Select,
   Space,
   Spin,
   Statistic,
@@ -50,6 +48,26 @@ function formatDate(value?: string) {
   return new Date(value).toLocaleString();
 }
 
+function uniqueItems(items: string[]) {
+  return Array.from(new Set(items));
+}
+
+function sortProxyGroups(groups: ProxyGroup[]) {
+  const priority = new Map<string, number>([
+    ["Proxy", 0],
+    ["Auto", 1],
+  ]);
+
+  return [...groups].sort((left, right) => {
+    const leftPriority = priority.get(left.name) ?? 10;
+    const rightPriority = priority.get(right.name) ?? 10;
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+    return left.name.localeCompare(right.name, "zh-CN");
+  });
+}
+
 function AppInner() {
   const [messageApi, contextHolder] = message.useMessage();
   const [form] = Form.useForm<SubscriptionFormValues>();
@@ -64,6 +82,7 @@ function AppInner() {
   const [submitting, setSubmitting] = useState(false);
   const [editing, setEditing] = useState<Subscription | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [selectingGroup, setSelectingGroup] = useState("");
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
@@ -206,6 +225,32 @@ function AppInner() {
     [form, messageApi, refreshAll],
   );
 
+  const visibleProxyGroups = useMemo(
+    () => sortProxyGroups(proxyGroups.filter((group) => group.name !== "GLOBAL")),
+    [proxyGroups],
+  );
+
+  const hiddenGlobalGroup = useMemo(
+    () => proxyGroups.find((group) => group.name === "GLOBAL"),
+    [proxyGroups],
+  );
+
+  const selectProxyNode = useCallback(
+    async (groupName: string, nodeName: string) => {
+      setSelectingGroup(groupName);
+      try {
+        await api.selectNode(groupName, nodeName);
+        messageApi.success(`已将 ${groupName} 切换到 ${nodeName}`);
+        await refreshAll();
+      } catch (error) {
+        messageApi.error(error instanceof Error ? error.message : "切换失败");
+      } finally {
+        setSelectingGroup("");
+      }
+    },
+    [messageApi, refreshAll],
+  );
+
   return (
     <Layout style={{ minHeight: "100vh" }}>
       {contextHolder}
@@ -318,44 +363,104 @@ function AppInner() {
               </Col>
 
               <Col xs={24} xl={10}>
-                <Card title="代理组与节点" extra={<Button size="small" onClick={() => void refreshAll()}>刷新代理组</Button>}>
+                <Card
+                  title="代理组与节点"
+                  extra={<Button size="small" onClick={() => void refreshAll()}>刷新代理组</Button>}
+                  styles={{ body: { padding: 18 } }}
+                >
                   {proxyGroupError ? <Alert type="warning" showIcon message="无法读取 mihomo 代理组" description={proxyGroupError} style={{ marginBottom: 16 }} /> : null}
-                  {proxyGroups.length === 0 ? (
+                  {hiddenGlobalGroup ? (
+                    <Alert
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                      message="GLOBAL 已隐藏"
+                      description="当前页面按 rule 模式展示实际有用的切换入口，真正决定流量的是 Proxy 组。"
+                    />
+                  ) : null}
+                  {visibleProxyGroups.length === 0 ? (
                     <Empty description={proxyGroupError ? "mihomo controller 不在线或未成功热加载配置" : "暂无代理组，请先导入有效订阅并等待 mihomo 加载成功"} />
                   ) : (
-                    <List
-                      itemLayout="vertical"
-                      dataSource={proxyGroups}
-                      renderItem={(group) => (
-                        <List.Item key={group.name}>
-                          <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                            <Flex justify="space-between" align="center">
-                              <div>
-                                <Text strong>{group.name}</Text>
-                                <br />
-                                <Text type="secondary">当前节点：{group.current || "未选择"}</Text>
+                    <Flex vertical gap={16}>
+                      {visibleProxyGroups.map((group) => {
+                        const options = uniqueItems(group.all);
+                        return (
+                          <Card
+                            key={group.name}
+                            size="small"
+                            style={{
+                              borderColor: group.name === "Proxy" ? "#0f766e" : "#d4d4d8",
+                              background: group.name === "Proxy"
+                                ? "linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%)"
+                                : "linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)",
+                            }}
+                            styles={{ body: { padding: 16 } }}
+                          >
+                            <Space direction="vertical" size={14} style={{ width: "100%" }}>
+                              <Flex justify="space-between" align="flex-start" gap={12} wrap="wrap">
+                                <div>
+                                  <Text strong style={{ fontSize: 16 }}>{group.name}</Text>
+                                  <br />
+                                  <Text type="secondary">当前节点：{group.current || "未选择"}</Text>
+                                </div>
+                                <Space size={8} wrap>
+                                  <Tag color={group.name === "Proxy" ? "cyan" : "gold"}>{group.type}</Tag>
+                                  <Tag color="default">{options.length} 个节点</Tag>
+                                </Space>
+                              </Flex>
+
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                                  gap: 10,
+                                }}
+                              >
+                                {options.map((item) => {
+                                  const selected = group.current === item;
+                                  const busy = selectingGroup === group.name;
+                                  return (
+                                    <Button
+                                      key={`${group.name}-${item}`}
+                                      type={selected ? "primary" : "default"}
+                                      ghost={!selected}
+                                      loading={busy && selected}
+                                      disabled={busy}
+                                      onClick={() => void selectProxyNode(group.name, item)}
+                                      style={{
+                                        height: "auto",
+                                        minHeight: 68,
+                                        padding: "12px 14px",
+                                        textAlign: "left",
+                                        justifyContent: "flex-start",
+                                        whiteSpace: "normal",
+                                        borderColor: selected ? undefined : "#cbd5e1",
+                                        background: selected ? undefined : "rgba(255,255,255,0.94)",
+                                      }}
+                                    >
+                                      <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                                        <Text
+                                          strong={selected}
+                                          style={{
+                                            color: selected ? "#ffffff" : "#0f172a",
+                                            lineHeight: 1.35,
+                                          }}
+                                        >
+                                          {item}
+                                        </Text>
+                                        <Text style={{ color: selected ? "rgba(255,255,255,0.78)" : "#64748b", fontSize: 12 }}>
+                                          {selected ? "当前生效节点" : "点击切换到该节点"}
+                                        </Text>
+                                      </Space>
+                                    </Button>
+                                  );
+                                })}
                               </div>
-                              <Tag color="blue">{group.type}</Tag>
-                            </Flex>
-                            <Select
-                              value={group.current || undefined}
-                              style={{ width: "100%" }}
-                              options={group.all.map((item) => ({ label: item, value: item }))}
-                              placeholder="选择节点"
-                              onChange={async (value) => {
-                                try {
-                                  await api.selectNode(group.name, value);
-                                  messageApi.success(`已将 ${group.name} 切换到 ${value}`);
-                                  await refreshAll();
-                                } catch (error) {
-                                  messageApi.error(error instanceof Error ? error.message : "切换失败");
-                                }
-                              }}
-                            />
-                          </Space>
-                        </List.Item>
-                      )}
-                    />
+                            </Space>
+                          </Card>
+                        );
+                      })}
+                    </Flex>
                   )}
                 </Card>
               </Col>
@@ -390,7 +495,7 @@ export default function App() {
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: "#4f46e5",
+          colorPrimary: "#0f766e",
           borderRadius: 12,
         },
       }}
