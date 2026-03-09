@@ -37,7 +37,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import type { AppStatus, ProxyGroup, Subscription, SubscriptionContent } from "./types";
 
-const { Header, Content } = Layout;
+const { Content } = Layout;
 const { Title, Paragraph, Text } = Typography;
 
 interface SubscriptionFormValues {
@@ -142,36 +142,49 @@ function AppInner() {
     }
   };
 
-  const columns: ColumnsType<Subscription> = useMemo(
-    () => [
-      { title: "名称", dataIndex: "name", key: "name" },
-      {
-        title: "状态",
-        key: "enabled",
-        render: (_, item) =>
-          item.enabled ? <Tag color="green">启用</Tag> : <Tag color="default">停用</Tag>,
-      },
-      {
-        title: "最近刷新",
-        key: "lastRefreshedAt",
-        render: (_, item) => formatDate(item.lastRefreshedAt),
-      },
-      {
-        title: "最近错误",
-        key: "lastError",
-        render: (_, item) =>
-          item.lastError ? <Text type="danger">{item.lastError}</Text> : <Text type="secondary">-</Text>,
-      },
-      {
-        title: "操作",
-        key: "actions",
-        render: (_, item) => (
-          <Space wrap>
-            <Button
-              size="small"
-              onClick={async () => {
-                try {
-                  setViewerLoading(true);
+	const columns: ColumnsType<Subscription> = useMemo(
+		() => [
+			{ title: "名称", dataIndex: "name", key: "name", width: 160 },
+			{
+				title: "状态",
+				key: "enabled",
+				width: 88,
+				render: (_, item) =>
+					item.enabled ? <Tag color="green">启用</Tag> : <Tag color="default">停用</Tag>,
+			},
+			{
+				title: "最近刷新",
+				key: "lastRefreshedAt",
+				width: 170,
+				render: (_, item) => formatDate(item.lastRefreshedAt),
+			},
+			{
+				title: "最近错误",
+				key: "lastError",
+				width: 220,
+				render: (_, item) =>
+					item.lastError ? (
+						<Tooltip title={item.lastError}>
+							<Text type="danger" ellipsis style={{ maxWidth: 200, display: "inline-block" }}>
+								{item.lastError}
+							</Text>
+						</Tooltip>
+					) : (
+						<Text type="secondary">-</Text>
+					),
+			},
+			{
+				title: "操作",
+				key: "actions",
+				width: 220,
+				render: (_, item) => (
+					<Space size={6} wrap>
+						<Button
+							size="small"
+							type="text"
+							onClick={async () => {
+								try {
+									setViewerLoading(true);
                   const content = await api.subscriptionContent(item.id);
                   setViewerData(content);
                   setViewerOpen(true);
@@ -184,20 +197,22 @@ function AppInner() {
             >
               查看内容
             </Button>
-            <Button
-              size="small"
-              onClick={() => {
-                setEditing(item);
-                form.setFieldsValue({ name: item.name, url: item.url, enabled: item.enabled });
+						<Button
+							size="small"
+							type="text"
+							onClick={() => {
+								setEditing(item);
+								form.setFieldsValue({ name: item.name, url: item.url, enabled: item.enabled });
                 setSubscriptionPanelOpen(true);
               }}
             >
               编辑
             </Button>
-            <Button
-              size="small"
-              icon={<ReloadOutlined />}
-              onClick={async () => {
+						<Button
+							size="small"
+							type="text"
+							icon={<ReloadOutlined />}
+							onClick={async () => {
                 try {
                   await api.refreshSubscription(item.id);
                   messageApi.success(`已刷新 ${item.name}`);
@@ -220,11 +235,11 @@ function AppInner() {
                   messageApi.error(error instanceof Error ? error.message : "删除失败");
                 }
               }}
-            >
-              <Button size="small" danger>
-                删除
-              </Button>
-            </Popconfirm>
+							>
+								<Button size="small" type="text" danger>
+									删除
+								</Button>
+							</Popconfirm>
           </Space>
         ),
       },
@@ -289,61 +304,56 @@ function AppInner() {
     setSubscriptionPanelOpen(true);
   }, [form]);
 
-  return (
-    <Layout style={{ minHeight: "100vh" }}>
-      {contextHolder}
-      <Header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          background: "rgba(15, 23, 42, 0.9)",
-          backdropFilter: "blur(12px)",
-        }}
-      >
-        <div>
-          <Title level={3} style={{ color: "white", margin: 0 }}>
-            Mihomo WebUI Proxy
-          </Title>
-          <Text style={{ color: "rgba(255,255,255,0.72)" }}>订阅管理、配置生成、节点切换一体化面板</Text>
-        </div>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={() => void refreshAll()}>
-            刷新视图
-          </Button>
-          <Button
-            type="primary"
-            icon={<SyncOutlined spin={syncing} />}
-            loading={syncing}
-            onClick={async () => {
-              setSyncing(true);
-              try {
-                const result = await api.syncConfig();
-                if (result.reloaded) {
-                  messageApi.success("配置已重新生成并热加载到 mihomo");
-                } else {
-                  messageApi.warning("配置已生成，但 mihomo controller 当前不可用，尚未热加载");
-                }
-                await refreshAll();
-              } catch (error) {
-                messageApi.error(error instanceof Error ? error.message : "同步失败");
-              } finally {
-                setSyncing(false);
-              }
-            }}
-          >
-            同步配置
-          </Button>
-        </Space>
-      </Header>
+	return (
+		<Layout style={{ minHeight: "100vh", background: "#f8fafc" }}>
+			{contextHolder}
 
-      <Content style={{ padding: 24 }}>
-        <Spin spinning={loading}>
-          <Flex vertical gap={24}>
-            <Row gutter={[16, 16]}>
-              <Col xs={24} xl={12}>
-                <Flex vertical gap={16} style={{ height: "100%" }}>
-                  <Row gutter={[16, 16]}>
+			<Content style={{ padding: 24 }}>
+				<Spin spinning={loading}>
+					<Flex vertical gap={24}>
+						<Row gutter={[16, 16]}>
+							<Col xs={24} xl={12}>
+								<Flex vertical gap={16} style={{ height: "100%" }}>
+									<Card styles={{ body: { padding: 20 } }}>
+										<Flex justify="space-between" align="flex-start" gap={16} wrap="wrap">
+											<div>
+												<Title level={3} style={{ margin: 0, color: "#0f172a" }}>
+													Mihomo WebUI Proxy
+												</Title>
+												<Text type="secondary">订阅管理、配置生成、节点切换一体化面板</Text>
+											</div>
+											<Space wrap>
+												<Button icon={<ReloadOutlined />} onClick={() => void refreshAll()}>
+													刷新视图
+												</Button>
+												<Button
+													type="primary"
+													icon={<SyncOutlined spin={syncing} />}
+													loading={syncing}
+													onClick={async () => {
+														setSyncing(true);
+														try {
+															const result = await api.syncConfig();
+															if (result.reloaded) {
+																messageApi.success("配置已重新生成并热加载到 mihomo");
+															} else {
+																messageApi.warning("配置已生成，但 mihomo controller 当前不可用，尚未热加载");
+															}
+															await refreshAll();
+														} catch (error) {
+															messageApi.error(error instanceof Error ? error.message : "同步失败");
+														} finally {
+															setSyncing(false);
+														}
+													}}
+												>
+													同步配置
+												</Button>
+											</Space>
+										</Flex>
+									</Card>
+
+									<Row gutter={[16, 16]}>
                     <Col xs={24} md={8} style={{ display: "flex" }}>
                       <Card style={{ width: "100%", height: "100%" }}>
                         <Statistic
