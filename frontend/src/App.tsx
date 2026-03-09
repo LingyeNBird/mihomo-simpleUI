@@ -570,9 +570,6 @@ function AppInner() {
 																<Text style={{ color: selected ? "rgba(255,255,255,0.78)" : "#64748b", fontSize: 12 }}>
 																	{sourceLabel}
 																</Text>
-																<Text style={{ color: selected ? "rgba(255,255,255,0.68)" : "#94a3b8", fontSize: 12 }}>
-																	{selected ? "当前生效节点" : "点击切换到该节点"}
-																</Text>
 															</Space>
 															</Button>
                                   );
