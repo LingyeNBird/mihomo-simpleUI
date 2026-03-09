@@ -1,6 +1,7 @@
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
+  InfoCircleOutlined,
   PlusOutlined,
   ReloadOutlined,
   SyncOutlined,
@@ -21,12 +22,14 @@ import {
   message,
   Popconfirm,
   Row,
+  Segmented,
   Space,
   Spin,
   Statistic,
   Switch,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -84,6 +87,7 @@ function AppInner() {
   const [subscriptionPanelOpen, setSubscriptionPanelOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [selectingGroup, setSelectingGroup] = useState("");
+  const [activeProxyGroupName, setActiveProxyGroupName] = useState("");
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
@@ -185,6 +189,7 @@ function AppInner() {
               onClick={() => {
                 setEditing(item);
                 form.setFieldsValue({ name: item.name, url: item.url, enabled: item.enabled });
+                setSubscriptionPanelOpen(true);
               }}
             >
               编辑
@@ -236,6 +241,25 @@ function AppInner() {
     () => proxyGroups.find((group) => group.name === "GLOBAL"),
     [proxyGroups],
   );
+
+  const activeProxyGroup = useMemo(() => {
+    if (visibleProxyGroups.length === 0) {
+      return null;
+    }
+    return visibleProxyGroups.find((group) => group.name === activeProxyGroupName) ?? visibleProxyGroups[0];
+  }, [activeProxyGroupName, visibleProxyGroups]);
+
+  useEffect(() => {
+    if (visibleProxyGroups.length === 0) {
+      if (activeProxyGroupName !== "") {
+        setActiveProxyGroupName("");
+      }
+      return;
+    }
+    if (!visibleProxyGroups.some((group) => group.name === activeProxyGroupName)) {
+      setActiveProxyGroupName(visibleProxyGroups[0].name);
+    }
+  }, [activeProxyGroupName, visibleProxyGroups]);
 
   const selectProxyNode = useCallback(
     async (groupName: string, nodeName: string) => {
@@ -320,8 +344,8 @@ function AppInner() {
               <Col xs={24} xl={12}>
                 <Flex vertical gap={16} style={{ height: "100%" }}>
                   <Row gutter={[16, 16]}>
-                    <Col xs={24} md={8}>
-                      <Card>
+                    <Col xs={24} md={8} style={{ display: "flex" }}>
+                      <Card style={{ width: "100%", height: "100%" }}>
                         <Statistic
                           title="Mihomo 控制器"
                           value={status?.mihomoConnected ? "已连接" : "未连接"}
@@ -333,16 +357,16 @@ function AppInner() {
                         </Paragraph>
                       </Card>
                     </Col>
-                    <Col xs={24} md={8}>
-                      <Card>
+                    <Col xs={24} md={8} style={{ display: "flex" }}>
+                      <Card style={{ width: "100%", height: "100%" }}>
                         <Statistic title="订阅数量" value={status?.subscriptionCount ?? 0} />
                         <Paragraph type="secondary" style={{ marginBottom: 0 }}>
                           最近配置生成：{formatDate(status?.lastConfigSyncAt)}
                         </Paragraph>
                       </Card>
                     </Col>
-                    <Col xs={24} md={8}>
-                      <Card>
+                    <Col xs={24} md={8} style={{ display: "flex" }}>
+                      <Card style={{ width: "100%", height: "100%" }}>
                         <Statistic title="配置路径" value={status?.configPath ?? "-"} valueStyle={{ fontSize: 16 }} />
                         <Paragraph type="secondary" style={{ marginBottom: 0 }}>
                           最近错误：{status?.lastConfigError || "无"}
@@ -425,34 +449,48 @@ function AppInner() {
 
               <Col xs={24} xl={12}>
                 <Card
-                  title="代理组与节点"
+                  title={
+                    <Space size={8}>
+                      <span>代理组与节点</span>
+                      <Tooltip
+                        title={
+                          hiddenGlobalGroup
+                            ? "GLOBAL 已隐藏。当前页面按 rule 模式展示实际有用的切换入口，真正决定流量的是 Proxy 组。"
+                            : "当前页面展示实际有用的代理组切换入口。"
+                        }
+                      >
+                        <InfoCircleOutlined style={{ color: "#64748b" }} />
+                      </Tooltip>
+                    </Space>
+                  }
                   extra={<Button size="small" onClick={() => void refreshAll()}>刷新代理组</Button>}
                   styles={{ body: { padding: 18 } }}
                   style={{ height: "100%" }}
                 >
                   {proxyGroupError ? <Alert type="warning" showIcon message="无法读取 mihomo 代理组" description={proxyGroupError} style={{ marginBottom: 16 }} /> : null}
-                  {hiddenGlobalGroup ? (
-                    <Alert
-                      type="info"
-                      showIcon
-                      style={{ marginBottom: 16 }}
-                      message="GLOBAL 已隐藏"
-                      description="当前页面按 rule 模式展示实际有用的切换入口，真正决定流量的是 Proxy 组。"
-                    />
-                  ) : null}
                   {visibleProxyGroups.length === 0 ? (
                     <Empty description={proxyGroupError ? "mihomo controller 不在线或未成功热加载配置" : "暂无代理组，请先导入有效订阅并等待 mihomo 加载成功"} />
                   ) : (
                     <Flex vertical gap={16}>
-                      {visibleProxyGroups.map((group) => {
-                        const options = uniqueItems(group.all);
+                      <Segmented
+                        block
+                        value={activeProxyGroup?.name}
+                        onChange={(value) => setActiveProxyGroupName(String(value))}
+                        options={visibleProxyGroups.map((group) => ({
+                          label: group.name,
+                          value: group.name,
+                        }))}
+                      />
+
+                      {activeProxyGroup ? (() => {
+                        const options = uniqueItems(activeProxyGroup.all);
                         return (
                           <Card
-                            key={group.name}
+                            key={activeProxyGroup.name}
                             size="small"
                             style={{
-                              borderColor: group.name === "Proxy" ? "#0f766e" : "#d4d4d8",
-                              background: group.name === "Proxy"
+                              borderColor: activeProxyGroup.name === "Proxy" ? "#0f766e" : "#d4d4d8",
+                              background: activeProxyGroup.name === "Proxy"
                                 ? "linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%)"
                                 : "linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)",
                             }}
@@ -461,12 +499,12 @@ function AppInner() {
                             <Space direction="vertical" size={14} style={{ width: "100%" }}>
                               <Flex justify="space-between" align="flex-start" gap={12} wrap="wrap">
                                 <div>
-                                  <Text strong style={{ fontSize: 16 }}>{group.name}</Text>
+                                  <Text strong style={{ fontSize: 16 }}>{activeProxyGroup.name}</Text>
                                   <br />
-                                  <Text type="secondary">当前节点：{group.current || "未选择"}</Text>
+                                  <Text type="secondary">当前节点：{activeProxyGroup.current || "未选择"}</Text>
                                 </div>
                                 <Space size={8} wrap>
-                                  <Tag color={group.name === "Proxy" ? "cyan" : "gold"}>{group.type}</Tag>
+                                  <Tag color={activeProxyGroup.name === "Proxy" ? "cyan" : "gold"}>{activeProxyGroup.type}</Tag>
                                   <Tag color="default">{options.length} 个节点</Tag>
                                 </Space>
                               </Flex>
@@ -479,16 +517,16 @@ function AppInner() {
                                 }}
                               >
                                 {options.map((item) => {
-                                  const selected = group.current === item;
-                                  const busy = selectingGroup === group.name;
+                                  const selected = activeProxyGroup.current === item;
+                                  const busy = selectingGroup === activeProxyGroup.name;
                                   return (
                                     <Button
-                                      key={`${group.name}-${item}`}
+                                      key={`${activeProxyGroup.name}-${item}`}
                                       type={selected ? "primary" : "default"}
                                       ghost={!selected}
                                       loading={busy && selected}
                                       disabled={busy}
-                                      onClick={() => void selectProxyNode(group.name, item)}
+                                      onClick={() => void selectProxyNode(activeProxyGroup.name, item)}
                                       style={{
                                         height: "auto",
                                         minHeight: 68,
@@ -521,7 +559,7 @@ function AppInner() {
                             </Space>
                           </Card>
                         );
-                      })}
+                      })() : null}
                     </Flex>
                   )}
                 </Card>
