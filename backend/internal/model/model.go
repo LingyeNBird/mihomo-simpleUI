@@ -20,11 +20,12 @@ type Delay struct {
 }
 
 type ProxyGroup struct {
-	Name    string   `json:"name"`
-	Type    string   `json:"type"`
-	Current string   `json:"current"`
-	All     []string `json:"all"`
-	History []Delay  `json:"history,omitempty"`
+	Name        string              `json:"name"`
+	Type        string              `json:"type"`
+	Current     string              `json:"current"`
+	All         []string            `json:"all"`
+	NodeSources map[string][]string `json:"nodeSources,omitempty"`
+	History     []Delay             `json:"history,omitempty"`
 }
 
 type Selection struct {

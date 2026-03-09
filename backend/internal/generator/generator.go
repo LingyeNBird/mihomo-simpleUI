@@ -56,7 +56,7 @@ func Generate(subscriptions []model.Subscription, selections []model.Selection, 
 			continue
 		}
 		providerName := providerKey(sub)
-		proxyNames, proxies, err := loadSubscriptionProxies(sub.FilePath)
+		proxyNames, proxies, err := LoadSubscriptionProxies(sub.FilePath)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("subscription %s could not load proxies: %v", sub.Name, err))
 			continue
@@ -105,7 +105,7 @@ func Generate(subscriptions []model.Subscription, selections []model.Selection, 
 		"proxies":         inlineProxies,
 		"proxy-providers": proxyProviders,
 		"proxy-groups":    proxyGroups,
-		"rules": []string{"MATCH,Proxy"},
+		"rules":           []string{"MATCH,Proxy"},
 	}
 
 	payload, err := yaml.Marshal(config)
@@ -135,7 +135,7 @@ func providerDisplayName(sub model.Subscription) string {
 	return name
 }
 
-func loadSubscriptionProxies(filePath string) ([]string, []map[string]any, error) {
+func LoadSubscriptionProxies(filePath string) ([]string, []map[string]any, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, nil, err

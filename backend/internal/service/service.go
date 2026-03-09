@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"mihomo-webui-proxy/backend/internal/config"
@@ -172,7 +173,40 @@ func (s *Service) SyncConfig(ctx context.Context) (model.ConfigSyncResult, error
 }
 
 func (s *Service) GetProxyGroups(ctx context.Context) ([]model.ProxyGroup, error) {
-	return s.mihomoClient.GetSelectableGroups(ctx)
+	groups, err := s.mihomoClient.GetSelectableGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	subscriptions, err := s.store.ListSubscriptions(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	nodeSources := make(map[string][]string)
+	for _, sub := range subscriptions {
+		if !sub.Enabled || sub.FilePath == "" {
+			continue
+		}
+		proxyNames, _, err := generator.LoadSubscriptionProxies(sub.FilePath)
+		if err != nil {
+			continue
+		}
+		for _, name := range proxyNames {
+			nodeSources[name] = appendUniqueString(nodeSources[name], sub.Name)
+		}
+	}
+
+	for index := range groups {
+		groups[index].NodeSources = make(map[string][]string)
+		for _, nodeName := range groups[index].All {
+			if sources := nodeSources[nodeName]; len(sources) > 0 {
+				groups[index].NodeSources[nodeName] = append([]string(nil), sources...)
+			}
+		}
+	}
+
+	return groups, nil
 }
 
 func (s *Service) SelectNode(ctx context.Context, groupName, nodeName string) error {
@@ -200,4 +234,15 @@ func (s *Service) GetStatus(ctx context.Context) model.AppStatus {
 		LastConfigSyncAt:    s.lastConfigSync,
 		LastConfigError:     s.lastConfigError,
 	}
+}
+
+func appendUniqueString(items []string, value string) []string {
+	for _, item := range items {
+		if item == value {
+			return items
+		}
+	}
+	items = append(items, value)
+	sort.Strings(items)
+	return items
 }
