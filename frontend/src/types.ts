@@ -20,6 +20,7 @@ export interface ProxyGroup {
   type: string;
   current: string;
   all: string[];
+  nodeSources?: Record<string, string[]>;
 }
 
 export interface AppStatus {

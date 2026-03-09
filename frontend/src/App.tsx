@@ -19,6 +19,7 @@ import {
   Form,
   Input,
   Layout,
+  List,
   message,
   Popconfirm,
   Row,
@@ -27,12 +28,10 @@ import {
   Spin,
   Statistic,
   Switch,
-  Table,
   Tag,
   Tooltip,
   Typography,
 } from "antd";
-import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import type { AppStatus, ProxyGroup, Subscription, SubscriptionContent } from "./types";
@@ -53,6 +52,19 @@ function formatDate(value?: string) {
 
 function uniqueItems(items: string[]) {
   return Array.from(new Set(items));
+}
+
+function formatNodeSourceLabel(nodeName: string, sources?: string[]) {
+  if (nodeName === "DIRECT" || nodeName === "REJECT") {
+    return "来源：内置策略";
+  }
+  if (nodeName === "Auto") {
+    return "来源：自动测速组";
+  }
+  if (!sources || sources.length === 0) {
+    return "来源：未知";
+  }
+  return sources.length === 1 ? `来源：${sources[0]}` : `来源：${sources.join(" / ")}`;
 }
 
 function sortProxyGroups(groups: ProxyGroup[]) {
@@ -142,111 +154,6 @@ function AppInner() {
     }
   };
 
-	const columns: ColumnsType<Subscription> = useMemo(
-		() => [
-			{ title: "名称", dataIndex: "name", key: "name", width: 160 },
-			{
-				title: "状态",
-				key: "enabled",
-				width: 88,
-				render: (_, item) =>
-					item.enabled ? <Tag color="green">启用</Tag> : <Tag color="default">停用</Tag>,
-			},
-			{
-				title: "最近刷新",
-				key: "lastRefreshedAt",
-				width: 170,
-				render: (_, item) => formatDate(item.lastRefreshedAt),
-			},
-			{
-				title: "最近错误",
-				key: "lastError",
-				width: 220,
-				render: (_, item) =>
-					item.lastError ? (
-						<Tooltip title={item.lastError}>
-							<Text type="danger" ellipsis style={{ maxWidth: 200, display: "inline-block" }}>
-								{item.lastError}
-							</Text>
-						</Tooltip>
-					) : (
-						<Text type="secondary">-</Text>
-					),
-			},
-			{
-				title: "操作",
-				key: "actions",
-				width: 220,
-				render: (_, item) => (
-					<Space size={6} wrap>
-						<Button
-							size="small"
-							type="text"
-							onClick={async () => {
-								try {
-									setViewerLoading(true);
-                  const content = await api.subscriptionContent(item.id);
-                  setViewerData(content);
-                  setViewerOpen(true);
-                } catch (error) {
-                  messageApi.error(error instanceof Error ? error.message : "读取订阅内容失败");
-                } finally {
-                  setViewerLoading(false);
-                }
-              }}
-            >
-              查看内容
-            </Button>
-						<Button
-							size="small"
-							type="text"
-							onClick={() => {
-								setEditing(item);
-								form.setFieldsValue({ name: item.name, url: item.url, enabled: item.enabled });
-                setSubscriptionPanelOpen(true);
-              }}
-            >
-              编辑
-            </Button>
-						<Button
-							size="small"
-							type="text"
-							icon={<ReloadOutlined />}
-							onClick={async () => {
-                try {
-                  await api.refreshSubscription(item.id);
-                  messageApi.success(`已刷新 ${item.name}`);
-                  await refreshAll();
-                } catch (error) {
-                  messageApi.error(error instanceof Error ? error.message : "刷新失败");
-                }
-              }}
-            >
-              刷新
-            </Button>
-            <Popconfirm
-              title="确认删除该订阅？"
-              onConfirm={async () => {
-                try {
-                  await api.deleteSubscription(item.id);
-                  messageApi.success(`已删除 ${item.name}`);
-                  await refreshAll();
-                } catch (error) {
-                  messageApi.error(error instanceof Error ? error.message : "删除失败");
-                }
-              }}
-							>
-								<Button size="small" type="text" danger>
-									删除
-								</Button>
-							</Popconfirm>
-          </Space>
-        ),
-      },
-    ],
-    [form, messageApi, refreshAll],
-  );
-
   const visibleProxyGroups = useMemo(
     () => sortProxyGroups(proxyGroups.filter((group) => group.name !== "GLOBAL")),
     [proxyGroups],
@@ -298,11 +205,62 @@ function AppInner() {
     form.resetFields();
   }, [form]);
 
-  const openCreateSubscription = useCallback(() => {
-    form.resetFields();
-    setEditing(null);
-    setSubscriptionPanelOpen(true);
-  }, [form]);
+	const openCreateSubscription = useCallback(() => {
+		form.resetFields();
+		setEditing(null);
+		setSubscriptionPanelOpen(true);
+	}, [form]);
+
+	const openSubscriptionViewer = useCallback(
+		async (item: Subscription) => {
+			try {
+				setViewerLoading(true);
+				const content = await api.subscriptionContent(item.id);
+				setViewerData(content);
+				setViewerOpen(true);
+			} catch (error) {
+				messageApi.error(error instanceof Error ? error.message : "读取订阅内容失败");
+			} finally {
+				setViewerLoading(false);
+			}
+		},
+		[messageApi],
+	);
+
+	const editSubscription = useCallback(
+		(item: Subscription) => {
+			setEditing(item);
+			form.setFieldsValue({ name: item.name, url: item.url, enabled: item.enabled });
+			setSubscriptionPanelOpen(true);
+		},
+		[form],
+	);
+
+	const refreshSubscriptionItem = useCallback(
+		async (item: Subscription) => {
+			try {
+				await api.refreshSubscription(item.id);
+				messageApi.success(`已刷新 ${item.name}`);
+				await refreshAll();
+			} catch (error) {
+				messageApi.error(error instanceof Error ? error.message : "刷新失败");
+			}
+		},
+		[messageApi, refreshAll],
+	);
+
+	const deleteSubscriptionItem = useCallback(
+		async (item: Subscription) => {
+			try {
+				await api.deleteSubscription(item.id);
+				messageApi.success(`已删除 ${item.name}`);
+				await refreshAll();
+			} catch (error) {
+				messageApi.error(error instanceof Error ? error.message : "删除失败");
+			}
+		},
+		[messageApi, refreshAll],
+	);
 
 	return (
 		<Layout style={{ minHeight: "100vh", background: "#f8fafc" }}>
@@ -452,8 +410,58 @@ function AppInner() {
                       </Card>
                     ) : null}
 
-                    <Table rowKey="id" columns={columns} dataSource={subscriptions} pagination={false} scroll={{ x: 960 }} />
-                  </Card>
+									{subscriptions.length === 0 ? (
+										<Empty description="暂无订阅，点击右上角添加订阅开始使用" />
+									) : (
+										<List
+											dataSource={subscriptions}
+											renderItem={(item) => (
+												<List.Item style={{ padding: 0, border: 0, marginBottom: 12 }}>
+													<Card size="small" style={{ width: "100%", borderColor: item.enabled ? "#cbd5e1" : "#e5e7eb" }}>
+														<Flex vertical gap={14}>
+															<Flex justify="space-between" align="flex-start" gap={16} wrap="wrap">
+																<div style={{ minWidth: 0, flex: 1 }}>
+																	<Flex align="center" gap={10} wrap="wrap">
+																		<Text strong style={{ fontSize: 16 }}>{item.name}</Text>
+																		{item.enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>}
+																	</Flex>
+																	<Tooltip title={item.url}>
+																		<Text type="secondary" ellipsis style={{ maxWidth: "100%", display: "inline-block", marginTop: 4 }}>
+																			{item.url}
+																		</Text>
+																	</Tooltip>
+																</div>
+																<Space size={6} wrap>
+																	<Button size="small" type="text" onClick={() => void openSubscriptionViewer(item)}>
+																		查看内容
+																	</Button>
+																	<Button size="small" type="text" onClick={() => editSubscription(item)}>
+																		编辑
+																	</Button>
+																	<Button size="small" type="text" icon={<ReloadOutlined />} onClick={() => void refreshSubscriptionItem(item)}>
+																		刷新
+																	</Button>
+																	<Popconfirm title="确认删除该订阅？" onConfirm={() => void deleteSubscriptionItem(item)}>
+																		<Button size="small" type="text" danger>
+																			删除
+																		</Button>
+																	</Popconfirm>
+																</Space>
+															</Flex>
+															<Flex gap={10} wrap="wrap">
+																<Tag color="default">最近刷新：{formatDate(item.lastRefreshedAt)}</Tag>
+																<Tag color="default">文件：{item.filePath || "-"}</Tag>
+																<Tag color={item.lastError ? "error" : "success"}>
+																	{item.lastError ? `最近错误：${item.lastError}` : "最近错误：无"}
+																</Tag>
+															</Flex>
+														</Flex>
+													</Card>
+												</List.Item>
+											)}
+										/>
+									)}
+								</Card>
                 </Flex>
               </Col>
 
@@ -492,9 +500,9 @@ function AppInner() {
                         }))}
                       />
 
-                      {activeProxyGroup ? (() => {
-                        const options = uniqueItems(activeProxyGroup.all);
-                        return (
+						{activeProxyGroup ? (() => {
+							const options = uniqueItems(activeProxyGroup.all);
+							return (
                           <Card
                             key={activeProxyGroup.name}
                             size="small"
@@ -526,11 +534,12 @@ function AppInner() {
                                   gap: 10,
                                 }}
                               >
-                                {options.map((item) => {
-                                  const selected = activeProxyGroup.current === item;
-                                  const busy = selectingGroup === activeProxyGroup.name;
-                                  return (
-                                    <Button
+													{options.map((item) => {
+														const selected = activeProxyGroup.current === item;
+														const busy = selectingGroup === activeProxyGroup.name;
+														const sourceLabel = formatNodeSourceLabel(item, activeProxyGroup.nodeSources?.[item]);
+														return (
+															<Button
                                       key={`${activeProxyGroup.name}-${item}`}
                                       type={selected ? "primary" : "default"}
                                       ghost={!selected}
@@ -558,11 +567,14 @@ function AppInner() {
                                         >
                                           {item}
                                         </Text>
-                                        <Text style={{ color: selected ? "rgba(255,255,255,0.78)" : "#64748b", fontSize: 12 }}>
-                                          {selected ? "当前生效节点" : "点击切换到该节点"}
-                                        </Text>
-                                      </Space>
-                                    </Button>
+																<Text style={{ color: selected ? "rgba(255,255,255,0.78)" : "#64748b", fontSize: 12 }}>
+																	{sourceLabel}
+																</Text>
+																<Text style={{ color: selected ? "rgba(255,255,255,0.68)" : "#94a3b8", fontSize: 12 }}>
+																	{selected ? "当前生效节点" : "点击切换到该节点"}
+																</Text>
+															</Space>
+															</Button>
                                   );
                                 })}
                               </div>
