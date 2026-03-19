@@ -57,10 +57,100 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			node_name TEXT NOT NULL,
 			modified_at TEXT NOT NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS auth_users (
+			username TEXT PRIMARY KEY,
+			password_hash TEXT NOT NULL,
+			must_change_password INTEGER NOT NULL DEFAULT 1,
+			password_changed_at TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);`,
+		`CREATE TABLE IF NOT EXISTS auth_sessions (
+			id TEXT PRIMARY KEY,
+			username TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			expires_at TEXT NOT NULL,
+			FOREIGN KEY(username) REFERENCES auth_users(username) ON DELETE CASCADE
+		);`,
 	} {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("migrate sqlite: %w", err)
 		}
+	}
+	return nil
+}
+
+func (s *SQLiteStore) UpsertAuthUser(ctx context.Context, user model.AuthUser) (model.AuthUser, error) {
+	user.UpdatedAt = time.Now().UTC()
+	if user.CreatedAt.IsZero() {
+		user.CreatedAt = user.UpdatedAt
+	}
+	if user.PasswordChangedAt.IsZero() {
+		user.PasswordChangedAt = user.UpdatedAt
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO auth_users (username, password_hash, must_change_password, password_changed_at, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(username) DO UPDATE SET
+			password_hash = excluded.password_hash,
+			must_change_password = excluded.must_change_password,
+			password_changed_at = excluded.password_changed_at,
+			updated_at = excluded.updated_at
+	`, user.Username, user.PasswordHash, boolToInt(user.MustChangePassword), user.PasswordChangedAt.Format(time.RFC3339), user.CreatedAt.Format(time.RFC3339), user.UpdatedAt.Format(time.RFC3339))
+	if err != nil {
+		return model.AuthUser{}, fmt.Errorf("upsert auth user: %w", err)
+	}
+	return s.GetAuthUser(ctx, user.Username)
+}
+
+func (s *SQLiteStore) GetAuthUser(ctx context.Context, username string) (model.AuthUser, error) {
+	return scanAuthUser(s.db.QueryRowContext(ctx, `SELECT username, password_hash, must_change_password, password_changed_at, created_at, updated_at FROM auth_users WHERE username = ?`, username))
+}
+
+func (s *SQLiteStore) CreateSession(ctx context.Context, session model.Session) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO auth_sessions (id, username, created_at, expires_at) VALUES (?, ?, ?, ?)`, session.ID, session.Username, session.CreatedAt.Format(time.RFC3339), session.ExpiresAt.Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("create session: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteStore) GetSession(ctx context.Context, id string) (model.Session, error) {
+	var item model.Session
+	var createdAt string
+	var expiresAt string
+	err := s.db.QueryRowContext(ctx, `SELECT id, username, created_at, expires_at FROM auth_sessions WHERE id = ?`, id).Scan(&item.ID, &item.Username, &createdAt, &expiresAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return model.Session{}, fmt.Errorf("session not found")
+		}
+		return model.Session{}, fmt.Errorf("scan session: %w", err)
+	}
+	parsedCreatedAt, err := time.Parse(time.RFC3339, createdAt)
+	if err != nil {
+		return model.Session{}, fmt.Errorf("parse session created at: %w", err)
+	}
+	parsedExpiresAt, err := time.Parse(time.RFC3339, expiresAt)
+	if err != nil {
+		return model.Session{}, fmt.Errorf("parse session expires at: %w", err)
+	}
+	item.CreatedAt = parsedCreatedAt
+	item.ExpiresAt = parsedExpiresAt
+	return item, nil
+}
+
+func (s *SQLiteStore) DeleteSession(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM auth_sessions WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete session: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteStore) DeleteExpiredSessions(ctx context.Context, now time.Time) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM auth_sessions WHERE expires_at <= ?`, now.UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("delete expired sessions: %w", err)
 	}
 	return nil
 }
@@ -184,6 +274,38 @@ func scanSubscription(s scanner) (model.Subscription, error) {
 		}
 		item.LastRefreshedAt = &parsed
 	}
+	return item, nil
+}
+
+func scanAuthUser(s scanner) (model.AuthUser, error) {
+	var item model.AuthUser
+	var mustChangePassword int
+	var passwordChangedAt string
+	var createdAt string
+	var updatedAt string
+	err := s.Scan(&item.Username, &item.PasswordHash, &mustChangePassword, &passwordChangedAt, &createdAt, &updatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return model.AuthUser{}, fmt.Errorf("auth user not found")
+		}
+		return model.AuthUser{}, fmt.Errorf("scan auth user: %w", err)
+	}
+	item.MustChangePassword = mustChangePassword == 1
+	parsedPasswordChangedAt, err := time.Parse(time.RFC3339, passwordChangedAt)
+	if err != nil {
+		return model.AuthUser{}, fmt.Errorf("parse password changed at: %w", err)
+	}
+	parsedCreatedAt, err := time.Parse(time.RFC3339, createdAt)
+	if err != nil {
+		return model.AuthUser{}, fmt.Errorf("parse auth user created at: %w", err)
+	}
+	parsedUpdatedAt, err := time.Parse(time.RFC3339, updatedAt)
+	if err != nil {
+		return model.AuthUser{}, fmt.Errorf("parse auth user updated at: %w", err)
+	}
+	item.PasswordChangedAt = parsedPasswordChangedAt
+	item.CreatedAt = parsedCreatedAt
+	item.UpdatedAt = parsedUpdatedAt
 	return item, nil
 }
 

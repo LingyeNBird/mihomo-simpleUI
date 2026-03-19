@@ -19,7 +19,10 @@ func main() {
 		log.Fatalf("open store: %v", err)
 	}
 	defer st.Close()
-	svc := service.New(cfg, st)
+	svc, err := service.New(cfg, st)
+	if err != nil {
+		log.Fatalf("create service: %v", err)
+	}
 	router := api.NewRouter(svc, cfg.StaticDir)
 	log.Printf("starting app on %s", cfg.ListenAddr)
 	if err := router.Run(cfg.ListenAddr); err != nil {

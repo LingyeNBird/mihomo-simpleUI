@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"mihomo-webui-proxy/backend/internal/auth"
 	"mihomo-webui-proxy/backend/internal/config"
 	"mihomo-webui-proxy/backend/internal/generator"
 	"mihomo-webui-proxy/backend/internal/mihomo"
@@ -18,19 +19,57 @@ import (
 type Service struct {
 	config          config.Config
 	store           *store.SQLiteStore
+	authManager     *auth.Manager
 	downloader      *subscription.Downloader
 	mihomoClient    *mihomo.Client
 	lastConfigSync  time.Time
 	lastConfigError string
 }
 
-func New(cfg config.Config, st *store.SQLiteStore) *Service {
+func New(cfg config.Config, st *store.SQLiteStore) (*Service, error) {
+	authManager := auth.NewManager(st)
+	if err := authManager.EnsureInitialUser(context.Background()); err != nil {
+		return nil, fmt.Errorf("ensure initial auth user: %w", err)
+	}
 	return &Service{
 		config:       cfg,
 		store:        st,
+		authManager:  authManager,
 		downloader:   subscription.NewDownloader(cfg.RequestTimeout, cfg.SubscriptionsDir),
 		mihomoClient: mihomo.NewClient(cfg.MihomoControllerURL, cfg.MihomoSecret, cfg.RequestTimeout),
+	}, nil
+}
+
+func (s *Service) Login(ctx context.Context, username, password string) (model.AuthStatus, model.Session, error) {
+	user, session, err := s.authManager.Authenticate(ctx, username, password)
+	if err != nil {
+		return model.AuthStatus{}, model.Session{}, err
 	}
+	return model.AuthStatus{Authenticated: true, MustChangePassword: user.MustChangePassword, Username: user.Username}, session, nil
+}
+
+func (s *Service) Logout(ctx context.Context, sessionID string) error {
+	return s.authManager.Logout(ctx, sessionID)
+}
+
+func (s *Service) AuthStatus(ctx context.Context, sessionID string) model.AuthStatus {
+	user, _, err := s.authManager.GetSessionUser(ctx, sessionID)
+	if err != nil {
+		return model.AuthStatus{}
+	}
+	return model.AuthStatus{Authenticated: true, MustChangePassword: user.MustChangePassword, Username: user.Username}
+}
+
+func (s *Service) ChangePassword(ctx context.Context, sessionID, currentPassword, newPassword string) (model.AuthStatus, error) {
+	user, _, err := s.authManager.GetSessionUser(ctx, sessionID)
+	if err != nil {
+		return model.AuthStatus{}, err
+	}
+	updated, err := s.authManager.ChangePassword(ctx, user.Username, currentPassword, newPassword)
+	if err != nil {
+		return model.AuthStatus{}, err
+	}
+	return model.AuthStatus{Authenticated: true, MustChangePassword: updated.MustChangePassword, Username: updated.Username}, nil
 }
 
 func (s *Service) ListSubscriptions(ctx context.Context) ([]model.Subscription, error) {

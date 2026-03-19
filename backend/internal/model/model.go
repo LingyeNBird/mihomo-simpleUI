@@ -58,3 +58,25 @@ type SubscriptionContent struct {
 	FilePath string `json:"filePath"`
 	Content  string `json:"content"`
 }
+
+type AuthUser struct {
+	Username           string    `json:"username"`
+	PasswordHash       string    `json:"-"`
+	MustChangePassword bool      `json:"mustChangePassword"`
+	PasswordChangedAt  time.Time `json:"passwordChangedAt"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
+}
+
+type Session struct {
+	ID        string    `json:"id"`
+	Username  string    `json:"username"`
+	CreatedAt time.Time `json:"createdAt"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+type AuthStatus struct {
+	Authenticated      bool   `json:"authenticated"`
+	MustChangePassword bool   `json:"mustChangePassword"`
+	Username           string `json:"username,omitempty"`
+}
