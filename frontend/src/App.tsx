@@ -35,6 +35,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import type { AppStatus, ProxyGroup, Subscription, SubscriptionContent } from "./types";
+import type { AuthStatus } from "./types";
 
 const { Content } = Layout;
 const { Title, Paragraph, Text } = Typography;
@@ -43,6 +44,11 @@ interface SubscriptionFormValues {
   name: string;
   url: string;
   enabled: boolean;
+}
+
+interface PasswordFormValues {
+  currentPassword: string;
+  newPassword: string;
 }
 
 function formatDate(value?: string) {
@@ -86,7 +92,9 @@ function sortProxyGroups(groups: ProxyGroup[]) {
 function AppInner() {
   const [messageApi, contextHolder] = message.useMessage();
   const [form] = Form.useForm<SubscriptionFormValues>();
+  const [passwordForm] = Form.useForm<PasswordFormValues>();
   const [status, setStatus] = useState<AppStatus | null>(null);
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [proxyGroups, setProxyGroups] = useState<ProxyGroup[]>([]);
   const [proxyGroupError, setProxyGroupError] = useState<string>("");
@@ -100,10 +108,20 @@ function AppInner() {
   const [syncing, setSyncing] = useState(false);
   const [selectingGroup, setSelectingGroup] = useState("");
   const [activeProxyGroupName, setActiveProxyGroupName] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
     try {
+      const nextAuthStatus = await api.authStatus();
+      setAuthStatus(nextAuthStatus);
+      if (!nextAuthStatus.authenticated || nextAuthStatus.mustChangePassword) {
+        setStatus(null);
+        setSubscriptions([]);
+        setProxyGroups([]);
+        setProxyGroupError("");
+        return;
+      }
       const [nextStatus, nextSubscriptions, nextGroups] = await Promise.all([
         api.status(),
         api.listSubscriptions(),
@@ -261,6 +279,87 @@ function AppInner() {
 		},
 		[messageApi, refreshAll],
 	);
+
+	const submitLogin = useCallback(async () => {
+		const username = "mihomo";
+		const currentPassword = passwordForm.getFieldValue("currentPassword");
+		if (!currentPassword) {
+			messageApi.error("请输入密码");
+			return;
+		}
+		setAuthSubmitting(true);
+		try {
+			const nextStatus = await api.login({ username, password: currentPassword });
+			setAuthStatus(nextStatus);
+			passwordForm.resetFields();
+			await refreshAll();
+		} catch (error) {
+			messageApi.error(error instanceof Error ? error.message : "登录失败");
+		} finally {
+			setAuthSubmitting(false);
+		}
+	}, [messageApi, passwordForm, refreshAll]);
+
+	const submitPasswordChange = useCallback(async (values: PasswordFormValues) => {
+		setAuthSubmitting(true);
+		try {
+			const nextStatus = await api.changePassword(values);
+			setAuthStatus(nextStatus);
+			passwordForm.resetFields();
+			messageApi.success("密码已更新");
+			await refreshAll();
+		} catch (error) {
+			messageApi.error(error instanceof Error ? error.message : "修改密码失败");
+		} finally {
+			setAuthSubmitting(false);
+		}
+	}, [messageApi, passwordForm, refreshAll]);
+
+	if (!authStatus?.authenticated || authStatus.mustChangePassword) {
+		return (
+			<Layout style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0f172a 0%, #0f766e 100%)" }}>
+				{contextHolder}
+				<Content style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+					<Card style={{ width: "100%", maxWidth: 420, borderRadius: 18 }} styles={{ body: { padding: 28 } }}>
+						<Space direction="vertical" size={18} style={{ width: "100%" }}>
+							<div>
+								<Title level={3} style={{ margin: 0, color: "#0f172a" }}>Mihomo WebUI Proxy</Title>
+								<Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+									{authStatus?.mustChangePassword
+										? "首次访问必须先修改默认密码，完成后才能进入控制面板。"
+										: "这是控制面板，登录后才能访问全部功能。"}
+								</Paragraph>
+							</div>
+
+							{authStatus?.mustChangePassword ? (
+								<Form layout="vertical" form={passwordForm} onFinish={(values) => void submitPasswordChange(values)}>
+									<Form.Item label="当前密码" name="currentPassword" rules={[{ required: true, message: "请输入当前密码" }]}>
+										<Input.Password autoComplete="current-password" />
+									</Form.Item>
+									<Form.Item label="新密码" name="newPassword" rules={[{ required: true, message: "请输入新密码" }, { min: 6, message: "至少 6 位" }]}>
+										<Input.Password autoComplete="new-password" />
+									</Form.Item>
+									<Button type="primary" htmlType="submit" block loading={authSubmitting}>修改密码并进入</Button>
+								</Form>
+							) : (
+								<Form layout="vertical" form={passwordForm} onFinish={() => void submitLogin()}>
+									<Form.Item label="账号" initialValue="mihomo">
+										<Input value="mihomo" disabled />
+									</Form.Item>
+									<Form.Item label="密码" name="currentPassword" rules={[{ required: true, message: "请输入密码" }]}>
+										<Input.Password autoComplete="current-password" />
+									</Form.Item>
+									<Button type="primary" htmlType="submit" block loading={authSubmitting}>登录</Button>
+								</Form>
+							)}
+
+							<Text type="secondary">初始账号密码均为 mihomo，登录后必须先改密。</Text>
+						</Space>
+					</Card>
+				</Content>
+			</Layout>
+		);
+	}
 
 	return (
 		<Layout style={{ minHeight: "100vh", background: "#f8fafc" }}>

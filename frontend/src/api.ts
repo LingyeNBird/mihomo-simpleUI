@@ -1,4 +1,4 @@
-import type { AppStatus, ConfigSyncResult, ProxyGroup, RefreshResult, Subscription, SubscriptionContent } from "./types";
+import type { AppStatus, AuthStatus, ConfigSyncResult, ProxyGroup, RefreshResult, Subscription, SubscriptionContent } from "./types";
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -20,6 +20,12 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => request<{ ok: boolean }>("/api/health"),
+  authStatus: () => request<AuthStatus>("/api/auth/status"),
+  login: (payload: { username: string; password: string }) =>
+    request<AuthStatus>("/api/auth/login", { method: "POST", body: JSON.stringify(payload) }),
+  logout: () => request<void>("/api/auth/logout", { method: "POST" }),
+  changePassword: (payload: { currentPassword: string; newPassword: string }) =>
+    request<AuthStatus>("/api/auth/change-password", { method: "POST", body: JSON.stringify(payload) }),
   status: () => request<AppStatus>("/api/status"),
   listSubscriptions: () => request<Subscription[]>("/api/subscriptions"),
   subscriptionContent: (id: number) => request<SubscriptionContent>(`/api/subscriptions/${id}/content`),

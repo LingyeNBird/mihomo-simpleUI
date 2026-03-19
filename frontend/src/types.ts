@@ -47,3 +47,9 @@ export interface SubscriptionContent {
   filePath: string;
   content: string;
 }
+
+export interface AuthStatus {
+  authenticated: boolean;
+  mustChangePassword: boolean;
+  username?: string;
+}
