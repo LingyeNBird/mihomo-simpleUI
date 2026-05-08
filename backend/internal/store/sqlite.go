@@ -162,7 +162,7 @@ func (s *SQLiteStore) ListSubscriptions(ctx context.Context) ([]model.Subscripti
 	}
 	defer rows.Close()
 
-	var items []model.Subscription
+	items := make([]model.Subscription, 0)
 	for rows.Next() {
 		item, err := scanSubscription(rows)
 		if err != nil {

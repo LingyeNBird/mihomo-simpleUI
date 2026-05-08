@@ -131,7 +131,7 @@ function AppInner() {
         }),
       ]);
       setStatus(nextStatus);
-      setSubscriptions(nextSubscriptions);
+      setSubscriptions(nextSubscriptions ?? []);
       setProxyGroups(nextGroups);
       if (nextGroups.length > 0) {
         setProxyGroupError("");
